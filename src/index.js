@@ -82,7 +82,7 @@ const loadedTodos = (payload): Action => {
   };
 };
 
-// function nextFactory(type: string, schema: Node<*>): (mixed) => Action {
+// function createNextAction(type: string, schema: Node<*>): (mixed) => Action {
 //   return function<RT>(payload: mixed): Action {
 //     // This throws if validate() fails. Otherwise we get a "good" payload
 //     const validData: RT = validate(schema, payload);
@@ -107,7 +107,7 @@ const getTodos = (): Action => ({
     type: "API",
     payload: {
       url: "albums",
-      next: nextFactory("LOADED_ALBUMS", albumsSchema)
+      next: createNextAction("LOADED_ALBUMS", albumsSchema)
     }
   })
 
@@ -115,7 +115,7 @@ const getTodos = (): Action => ({
     type: "API",
     payload: {
       url: `album/${id}`,
-      next: nextFactory("LOADED_ALBUM", albumSchema)
+      next: createNextAction("LOADED_ALBUM", albumSchema)
     }
   })
 
@@ -123,7 +123,7 @@ const getTodos = (): Action => ({
     type: "API",
     payload: {
       url: `album/${id}`,
-      next: nextFactory("ALBUM_UPDATED", object({ status: boolean })),
+      next: createNextAction("ALBUM_UPDATED", object({ status: boolean })),
       method: "POST"
     }
   })

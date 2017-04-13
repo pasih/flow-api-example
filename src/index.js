@@ -61,7 +61,8 @@ type Action =
   | { type: "API", payload: apiPayload }
   | { type: "LOADED_TODOS", payload: Array<Todo> }
   | { type: "LOADED_ALBUMS", payload: Array<Album> }
-  | { type: "LOADED_ALBUM", payload: Album };
+  | { type: "LOADED_ALBUM", payload: Album }
+  | { type: "ALBUM_UPDATED", payload: boolean };
 
 export type GetState = () => Object;
 export type ThunkAction = (dispatch: Dispatch, getState: GetState) => any;
@@ -104,14 +105,27 @@ const getTodos = (): Action => ({
 
   const getAlbums = (): Action => ({
     type: "API",
-    payload: "albums",
-    next: nextFactory("LOADED_ALBUMS", albumsSchema)
+    payload: {
+      url: "albums",
+      next: nextFactory("LOADED_ALBUMS", albumsSchema)
+    }
   })
 
   const getAlbums = (id: number): Action => ({
     type: "API",
-    payload: `album/${id}`,
-    next: nextFactory("LOADED_ALBUM", albumSchema)
+    payload: {
+      url: `album/${id}`,
+      next: nextFactory("LOADED_ALBUM", albumSchema)
+    }
+  })
+
+  const updateAlbum = (id: number, title: string): Action => ({
+    type: "API",
+    payload: {
+      url: `album/${id}`,
+      next: nextFactory("ALBUM_UPDATED", object({ status: boolean })),
+      method: "POST"
+    }
   })
 
 */

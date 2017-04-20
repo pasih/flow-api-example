@@ -26,13 +26,14 @@ type Album = {
 };
 
 /* Validation schemas for validating a server response payload */
+
 const albumSchema = object({
   userId: number,
   id: number,
   title: string
 });
 
-const AlbumsSchema = arrayOf(albumSchema);
+const albumsSchema = arrayOf(albumSchema);
 
 const todosSchema = arrayOf(
   object({
@@ -49,20 +50,53 @@ type State = {
   album: ?Album
 };
 
+type PayloadSpec<T> = {|
+  type: string,
+  payload: T | Error,
+  error?: boolean,
+  meta?: mixed
+|};
+
 type apiPayload = {
   url: string,
-  next: (mixed) => Action
+  next: PayloadSpec<*> => Action
 };
 
-/* In reality, these would probably be generic types with error and meta. I'm keeping it
-   simple here. */
+type ApiAction = { type: "API", payload?: apiPayload };
+type LoadedTodosAction = { type: "LOADED_TODOS", payload?: Array<Todo> };
+type loadedAlbumsAction = { type: "LOADED_ALBUMS", payload?: Array<Album> };
 
-type Action =
-  | { type: "API", payload: apiPayload }
-  | { type: "LOADED_TODOS", payload: Array<Todo> }
-  | { type: "LOADED_ALBUMS", payload: Array<Album> }
-  | { type: "LOADED_ALBUM", payload: Album }
-  | { type: "ALBUM_UPDATED", payload: boolean };
+type Action = ApiAction | LoadedTodosAction | loadedAlbumsAction;
+
+const getTodos = (): Action => ({
+  type: "API",
+  payload: {
+    url: "todos",
+    next: (payload: mixed, error?: boolean, meta?: mixed): Action => ({
+      type: "LOADED_TODOS",
+      payload: payload instanceof Error
+        ? payload
+        : validate(todosSchema, payload),
+      meta,
+      error
+    })
+  }
+});
+
+const getAlbums = (): Action => ({
+  type: "API",
+  payload: {
+    url: "albums",
+    next: (payload: mixed, error?: boolean, meta?: mixed): Action => ({
+      type: "LOADED_ALBUMS",
+      payload: payload instanceof Error
+        ? payload
+        : validate(albumsSchema, payload),
+      meta,
+      error
+    })
+  }
+});
 
 export type GetState = () => Object;
 export type ThunkAction = (dispatch: Dispatch, getState: GetState) => any;
@@ -73,62 +107,6 @@ const INITIAL_STATE = {
   albums: [],
   album: undefined
 };
-
-const loadedTodos = (payload): Action => {
-  const validData: Array<Todo> = validate(todosSchema, payload);
-  return {
-    type: "LOADED_TODOS",
-    payload: validData
-  };
-};
-
-// function createNextAction(type: string, schema: Node<*>): (mixed) => Action {
-//   return function<RT>(payload: mixed): Action {
-//     // This throws if validate() fails. Otherwise we get a "good" payload
-//     const validData: RT = validate(schema, payload);
-//     return {
-//       type,
-//       payload: validData
-//     };
-//   };
-// }
-
-const getTodos = (): Action => ({
-  type: "API",
-  payload: {
-    url: "todos",
-    next: loadedTodos
-  }
-});
-
-/* GOAL: "clone" API call functions:
-
-  const getAlbums = (): Action => ({
-    type: "API",
-    payload: {
-      url: "albums",
-      next: createNextAction("LOADED_ALBUMS", albumsSchema)
-    }
-  })
-
-  const getAlbums = (id: number): Action => ({
-    type: "API",
-    payload: {
-      url: `album/${id}`,
-      next: createNextAction("LOADED_ALBUM", albumSchema)
-    }
-  })
-
-  const updateAlbum = (id: number, title: string): Action => ({
-    type: "API",
-    payload: {
-      url: `album/${id}`,
-      next: createNextAction("ALBUM_UPDATED", object({ status: boolean })),
-      method: "POST"
-    }
-  })
-
-*/
 
 export default function createReducer(initialState: ?{}, handlers: {}) {
   return function reducer(
@@ -158,24 +136,34 @@ const rootReducer = (state: State = INITIAL_STATE, action: Action) => {
 
 const BASE_URL = "https://jsonplaceholder.typicode.com/";
 
-const apiMiddleware = ({ dispatch }: { dispatch: Dispatch }) =>
-  next =>
-    action => {
-      if (action.type !== "API") {
-        return next(action);
+const apiMiddleware = ({
+  dispatch
+}: { dispatch: Dispatch }) => next => action => {
+  if (action.type !== "API") {
+    return next(action);
+  }
+
+  const { payload } = action;
+
+  fetch(BASE_URL + payload.url)
+    .then(r => r.json())
+    .then(r => {
+      let action;
+      try {
+        action = payload.next(r);
+      } catch (error) {
+        console.log("------- CAUGHT ERROR within nex() -------");
+        action = payload.next(error, true);
       }
-
-      const { payload } = action;
-
-      fetch(BASE_URL + payload.url)
-        .then(response => response.json())
-        .then(response => dispatch(payload.next(response)))
-        .catch(error => {
-          console.log("------- CAUGHT ERROR -------");
-          console.log(error);
-          /* In real app we would call payload.next with an error here */
-        });
-    };
+      dispatch(action);
+    })
+    .catch(error => {
+      console.log("------- CAUGHT ERROR -------");
+      payload.next(error, true);
+      /* In real app we would call payload.next with an error here */
+    });
+  return next(action);
+};
 
 // const rootReducer = createReducer(INITIAL_STATE, );
 const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
@@ -185,6 +173,7 @@ const store: Store = createStore(
 );
 
 store.dispatch(getTodos());
+store.dispatch(getAlbums());
 
 ReactDOM.render(
   <Provider store={store}><App /></Provider>,
